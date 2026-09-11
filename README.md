@@ -89,3 +89,16 @@ For the Android display, open the deployed URL in a browser and enable its full-
 - A live endpoint necessarily stores submitted data; limit Sheet access to staff who need it and follow Baylor’s data-handling requirements.
 - Static hosting is cached. After updating `config.js`, refresh the kiosk browser and, if needed, clear its site cache.
 - The interface is an original CSS approximation inspired by the provided signage; it does not include copied logos or proprietary artwork.
+
+## Install full-screen on the Android kiosk
+
+After deploying the latest files to GitHub Pages:
+
+1. Open the GitHub Pages URL in Chrome on the kiosk.
+2. Open Chrome's three-dot menu and choose **Install app** or **Add to Home screen**.
+3. If Android offers **Install**, choose it rather than creating a plain bookmark shortcut.
+4. Return to the Android home screen and open **AI Check-In** using its new icon. It launches in full-screen portrait mode without Chrome's address bar.
+5. Complete a real check-in and confirm that a new row appears in the Sheet.
+6. Optionally enable Android **App pinning** under **Settings → Security → More security settings → App pinning**, then pin AI Check-In from the recent-apps screen. Require the device PIN to unpin it.
+
+Chrome may need one refresh after GitHub finishes deploying before the install option appears. Reinstall the app after major hosting-URL changes.
