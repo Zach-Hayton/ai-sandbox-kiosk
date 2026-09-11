@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#073f3d"/>
-  <circle cx="256" cy="165" r="82" fill="none" stroke="#f3e937" stroke-width="16"/>
-  <circle cx="256" cy="165" r="18" fill="#f3e937"/>
-  <path d="M146 350h220" stroke="#f3e937" stroke-width="20" stroke-linecap="round"/>
-  <path d="M256 82v166M173 165h166" stroke="#f3e937" stroke-width="8" opacity=".72"/>
-  <text x="256" y="320" fill="#f8fffd" font-family="Arial,sans-serif" font-size="94" font-weight="700" text-anchor="middle">AI</text>
-</svg>
