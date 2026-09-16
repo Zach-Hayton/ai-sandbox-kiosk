@@ -2,22 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#073f3d">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#154734">
   <meta name="description" content="Touch-friendly check-in kiosk for the Hankamer AI Sandbox.">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI Sandbox Check-In</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23073f3d'/%3E%3Ccircle cx='32' cy='24' r='12' fill='none' stroke='%23f3e937' stroke-width='3'/%3E%3Ccircle cx='32' cy='24' r='3' fill='%23f3e937'/%3E%3Cpath d='M18 48h28' stroke='%23f3e937' stroke-width='4'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="app-icon.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="ambient ambient-one" aria-hidden="true"></div>
-  <div class="ambient ambient-two" aria-hidden="true"></div>
-  <div class="contours" aria-hidden="true"></div>
-
   <button class="fullscreen-button" id="fullscreenButton" type="button" aria-pressed="false">
     <svg class="enter-fullscreen-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
     <svg class="exit-fullscreen-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h5V3M21 8h-5V3M3 16h5v5M21 16h-5v5"/></svg>
@@ -27,22 +23,20 @@
 
   <main class="kiosk-shell">
     <header class="brand-lockup" aria-label="Hankamer School of Business AI Sandbox">
-      <div class="orbit-mark" aria-hidden="true"><span></span></div>
       <p class="eyebrow">Hankamer School of Business</p>
-      <div class="brand-title"><span>AI</span> Sandbox</div>
-      <div class="rule"><i></i></div>
+      <div class="brand-title">AI Sandbox</div>
     </header>
 
-    <section class="screen is-active" id="idleScreen" aria-labelledby="welcomeTitle">
+    <section class="screen" id="idleScreen" aria-labelledby="welcomeTitle">
       <div class="idle-content">
         <p class="section-label">HSB Technology Center</p>
         <h1 id="welcomeTitle">Welcome to the<br><strong>AI Sandbox</strong></h1>
         <p class="welcome-copy">Check in before you begin exploring.</p>
-        <button class="primary-button pulse-button" id="startButton" type="button">
+        <button class="primary-button" id="startButton" type="button">
           <span>Tap to check in</span>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
         </button>
-        <p class="privacy-note">Your information is cleared after check-in.</p>
+        <p class="privacy-note">This form clears after check-in.</p>
       </div>
     </section>
 
@@ -53,7 +47,7 @@
         </button>
         <div>
           <p class="section-label">Visitor check-in</p>
-          <h1 id="formTitle">Tell us about your visit</h1>
+          <h1 id="formTitle">Check in</h1>
         </div>
       </div>
 
@@ -61,7 +55,7 @@
         <div class="form-grid">
           <label class="field full-width">
             <span>Baylor email <b>Required</b></span>
-            <input id="email" name="email" type="email" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="name@baylor.edu" required>
+            <input id="email" name="email" aria-describedby="emailError" maxlength="254" type="email" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="name@baylor.edu" required>
             <small class="field-error" id="emailError"></small>
           </label>
 
@@ -72,7 +66,7 @@
 
           <label class="field full-width">
             <span>Purpose of visit <b>Required</b></span>
-            <select id="purpose" name="purpose" required>
+            <select id="purpose" name="purpose" aria-describedby="purposeError" required>
               <option value="">Choose one</option>
               <option>Explore AI tools</option>
               <option>Coursework or assignment</option>
@@ -85,13 +79,13 @@
           </label>
         </div>
 
-        <fieldset class="station-fieldset">
+        <fieldset class="station-fieldset" aria-describedby="stationError">
           <legend>Choose a station <b>Required</b></legend>
           <div class="station-grid">
-            <label class="station-card"><input type="radio" name="station" value="1"><span class="computer-icon" aria-hidden="true"></span><strong>01</strong><small>Station</small></label>
-            <label class="station-card"><input type="radio" name="station" value="2"><span class="computer-icon" aria-hidden="true"></span><strong>02</strong><small>Station</small></label>
-            <label class="station-card"><input type="radio" name="station" value="3"><span class="computer-icon" aria-hidden="true"></span><strong>03</strong><small>Station</small></label>
-            <label class="station-card"><input type="radio" name="station" value="4"><span class="computer-icon" aria-hidden="true"></span><strong>04</strong><small>Station</small></label>
+            <label class="station-card"><input type="radio" name="station" required value="1"><strong>01</strong><small>Station</small></label>
+            <label class="station-card"><input type="radio" name="station" required value="2"><strong>02</strong><small>Station</small></label>
+            <label class="station-card"><input type="radio" name="station" required value="3"><strong>03</strong><small>Station</small></label>
+            <label class="station-card"><input type="radio" name="station" required value="4"><strong>04</strong><small>Station</small></label>
           </div>
           <small class="field-error" id="stationError"></small>
         </fieldset>
@@ -110,27 +104,28 @@
       <div class="success-content">
         <div class="success-mark" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="m18 33 9 9 20-22"/></svg></div>
         <p class="section-label">Check-in complete</p>
-        <h1 id="successTitle">You’re all set.</h1>
-        <p>Have a great session in the AI Sandbox.</p>
+        <h1 id="successTitle" tabindex="-1">You’re all set.</h1>
+        <p id="successMessage">Have a great session in the AI Sandbox.</p>
         <div class="countdown"><span id="countdownNumber">5</span><small>Returning to welcome</small></div>
       </div>
     </section>
 
     <footer>
-      <span>Open-source AI · private, local, and ready to explore.</span>
+      <span>Baylor University · HSB Technology Center</span>
       <span class="mode-indicator" id="modeIndicator">Demo mode</span>
     </footer>
   </main>
 
-  <div class="timeout-dialog" id="timeoutDialog" role="dialog" aria-modal="true" aria-labelledby="timeoutTitle" hidden>
+  <dialog class="timeout-dialog" id="timeoutDialog" aria-labelledby="timeoutTitle">
     <div>
       <p class="section-label">Still there?</p>
       <h2 id="timeoutTitle">Your session is about to reset.</h2>
       <p>For privacy, this form will clear in <strong id="timeoutCountdown">10</strong> seconds.</p>
       <button class="primary-button" id="continueButton" type="button">Continue check-in</button>
     </div>
-  </div>
+  </dialog>
 
+  <noscript>JavaScript is required to use this check-in form.</noscript>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>

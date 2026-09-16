@@ -1,297 +1,232 @@
 (() => {
   "use strict";
 
-  const defaults = {
-    mode: "demo",
-    endpoint: "",
-    inactivitySeconds: 75,
-    warningSeconds: 10,
-    successSeconds: 5,
-    requireBaylorEmail: true,
-    kioskId: "AI-SANDBOX-01"
+  const config = {
+    mode: "demo", endpoint: "", inactivitySeconds: 75, warningSeconds: 10,
+    successSeconds: 5, requireBaylorEmail: true, kioskId: "AI-SANDBOX-01",
+    ...window.KIOSK_CONFIG
   };
-  const config = { ...defaults, ...(window.KIOSK_CONFIG || {}) };
-
-  const screens = {
-    idle: document.getElementById("idleScreen"),
-    form: document.getElementById("formScreen"),
-    success: document.getElementById("successScreen")
-  };
-  const form = document.getElementById("checkinForm");
-  const email = document.getElementById("email");
-  const purpose = document.getElementById("purpose");
-  const submitButton = document.getElementById("submitButton");
-  const timeoutDialog = document.getElementById("timeoutDialog");
-  const modeIndicator = document.getElementById("modeIndicator");
-  const fullscreenButton = document.getElementById("fullscreenButton");
-  const fullscreenMessage = document.getElementById("fullscreenMessage");
+  const byId = id => document.getElementById(id);
+  const form = byId("checkinForm");
+  const email = byId("email");
+  const purpose = byId("purpose");
+  const dialog = byId("timeoutDialog");
+  const submit = byId("submitButton");
+  const fullscreen = byId("fullscreenButton");
   let activeScreen = "idle";
-  let inactivityTimer;
-  let warningTimer;
-  let successTimer;
+  let inactivityTimer, warningTimer, successTimer;
+  let request = null;
+  let submission = null;
+  let previousFocus;
 
-  modeIndicator.textContent = config.mode === "demo" ? "Demo mode" : "Live check-in";
+  byId("modeIndicator").textContent = config.mode === "demo" ? "Demo · no data saved" : "Visitor check-in";
 
-  function fullscreenElement() {
-    return document.fullscreenElement || document.webkitFullscreenElement;
-  }
-
-  function updateFullscreenButton() {
-    const active = Boolean(fullscreenElement());
-    fullscreenButton.setAttribute("aria-pressed", String(active));
-    fullscreenButton.querySelector("span").textContent = active ? "Exit full screen" : "Full screen";
-    fullscreenButton.setAttribute("aria-label", active ? "Exit full screen" : "Enter full screen");
-    fullscreenMessage.textContent = "";
-  }
-
-  async function toggleFullscreen() {
-    fullscreenMessage.textContent = "";
-    try {
-      if (fullscreenElement()) {
-        const exit = document.exitFullscreen || document.webkitExitFullscreen;
-        if (exit) await exit.call(document);
-      } else {
-        const enter = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
-        if (!enter) throw new Error("Fullscreen is not supported by this browser.");
-        await enter.call(document.documentElement, { navigationUI: "hide" });
-      }
-    } catch (error) {
-      fullscreenMessage.textContent = "This browser blocked full screen. Try opening the page in Chrome.";
-      console.warn("Fullscreen request failed:", error);
-    }
-    updateFullscreenButton();
-  }
-
-  const supportsFullscreen = Boolean(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
-  fullscreenButton.classList.toggle("is-hidden", !supportsFullscreen);
-  fullscreenButton.addEventListener("click", toggleFullscreen);
-  document.addEventListener("fullscreenchange", updateFullscreenButton);
-  document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
-  updateFullscreenButton();
-
-  function showScreen(name) {
-    Object.entries(screens).forEach(([key, element]) => {
-      const active = key === name;
-      element.hidden = !active;
-      element.classList.toggle("is-active", active);
-    });
-    activeScreen = name;
-    timeoutDialog.hidden = true;
+  function clearTimers() {
     clearTimeout(inactivityTimer);
     clearInterval(warningTimer);
+    clearInterval(successTimer);
+  }
+
+  function showScreen(name) {
+    clearTimers();
+    dialog.close();
+    for (const screen of ["idle", "form", "success"]) {
+      byId(`${screen}Screen`).hidden = screen !== name;
+    }
+    activeScreen = name;
     if (name === "form") resetInactivityTimer();
   }
 
-  function clearSensitiveFields() {
+  function clearErrors() {
+    for (const id of ["emailError", "purposeError", "stationError", "submitError"]) {
+      byId(id).textContent = "";
+    }
+    form.querySelectorAll("[aria-invalid]").forEach(field => field.removeAttribute("aria-invalid"));
+  }
+
+  function clearForm() {
     form.reset();
-    document.getElementById("emailError").textContent = "";
-    document.getElementById("purposeError").textContent = "";
-    document.getElementById("stationError").textContent = "";
-    document.getElementById("submitError").textContent = "";
+    clearErrors();
+    submission = null;
+  }
+
+  function setBusy(busy) {
+    for (const control of form.elements) control.disabled = busy;
+    byId("backButton").disabled = busy;
+    form.setAttribute("aria-busy", String(busy));
+    submit.querySelector("span").textContent = busy ? "Checking in…" : "Check in";
   }
 
   function returnToIdle() {
-    clearInterval(successTimer);
-    clearTimeout(inactivityTimer);
-    clearInterval(warningTimer);
-    clearSensitiveFields();
+    request?.abort();
+    request = null;
+    setBusy(false);
+    clearForm();
     showScreen("idle");
-    document.getElementById("startButton").focus({ preventScroll: true });
-  }
-
-  function startCheckIn() {
-    clearSensitiveFields();
-    showScreen("form");
-    setTimeout(() => email.focus({ preventScroll: true }), 80);
+    byId("startButton").focus({ preventScroll: true });
   }
 
   function resetInactivityTimer() {
-    if (activeScreen !== "form" || !timeoutDialog.hidden) return;
+    if (activeScreen !== "form" || dialog.open || request) return;
     clearTimeout(inactivityTimer);
     inactivityTimer = setTimeout(showTimeoutWarning, Math.max(5, config.inactivitySeconds) * 1000);
   }
 
   function showTimeoutWarning() {
-    if (activeScreen !== "form") return;
     let seconds = Math.max(3, config.warningSeconds);
-    document.getElementById("timeoutCountdown").textContent = seconds;
-    timeoutDialog.hidden = false;
-    document.getElementById("continueButton").focus({ preventScroll: true });
+    previousFocus = document.activeElement;
+    byId("timeoutCountdown").textContent = seconds;
+    dialog.showModal();
+    byId("continueButton").focus();
     warningTimer = setInterval(() => {
-      seconds -= 1;
-      document.getElementById("timeoutCountdown").textContent = Math.max(0, seconds);
+      byId("timeoutCountdown").textContent = --seconds;
       if (seconds <= 0) returnToIdle();
     }, 1000);
   }
 
   function continueCheckIn() {
     clearInterval(warningTimer);
-    timeoutDialog.hidden = true;
+    dialog.close();
     resetInactivityTimer();
-    email.focus({ preventScroll: true });
+    (previousFocus || email).focus();
   }
 
-  function getPayload() {
-    const data = new FormData(form);
-    return {
-      timestamp: new Date().toISOString(),
-      kioskId: config.kioskId,
-      email: String(data.get("email") || "").trim().toLowerCase(),
-      name: String(data.get("name") || "").trim(),
-      purpose: String(data.get("purpose") || ""),
-      station: String(data.get("station") || ""),
-      userAgent: navigator.userAgent
-    };
+  function validate() {
+    clearErrors();
+    email.value = email.value.trim().toLowerCase();
+    const station = form.querySelector("input[name=station]:checked");
+    if (!email.validity.valid) {
+      byId("emailError").textContent = "Enter a valid email address.";
+    } else if (config.requireBaylorEmail && !email.value.endsWith("@baylor.edu")) {
+      byId("emailError").textContent = "Use your @baylor.edu email address.";
+    }
+    if (!purpose.value) byId("purposeError").textContent = "Choose the purpose of your visit.";
+    if (!station) byId("stationError").textContent = "Choose the station you will use.";
+    email.setAttribute("aria-invalid", String(Boolean(byId("emailError").textContent)));
+    purpose.setAttribute("aria-invalid", String(Boolean(byId("purposeError").textContent)));
+    form.querySelectorAll("input[name=station]").forEach(field => field.setAttribute("aria-invalid", String(!station)));
+    const firstInvalid = form.querySelector('[aria-invalid="true"]');
+    firstInvalid?.focus();
+    return !firstInvalid;
   }
 
-  function validate(payload) {
-    let valid = true;
-    const emailError = document.getElementById("emailError");
-    const purposeError = document.getElementById("purposeError");
-    const stationError = document.getElementById("stationError");
-    emailError.textContent = "";
-    purposeError.textContent = "";
-    stationError.textContent = "";
-
-    const basicEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!basicEmail.test(payload.email)) {
-      emailError.textContent = "Enter a valid email address.";
-      valid = false;
-    } else if (config.requireBaylorEmail && !payload.email.endsWith("@baylor.edu")) {
-      emailError.textContent = "Use your @baylor.edu email address.";
-      valid = false;
+  function getSubmission() {
+    const fields = Object.fromEntries(new FormData(form));
+    fields.name = fields.name.trim();
+    const fingerprint = JSON.stringify(fields);
+    if (!submission || submission.fingerprint !== fingerprint) {
+      submission = {
+        fingerprint,
+        key: crypto.randomUUID(),
+        payload: { ...fields, timestamp: new Date().toISOString(), kioskId: config.kioskId }
+      };
     }
-    if (!payload.purpose) {
-      purposeError.textContent = "Choose the purpose of your visit.";
-      valid = false;
-    }
-    if (!payload.station) {
-      stationError.textContent = "Choose the station you will use.";
-      valid = false;
-    }
-    if (!valid) {
-      const firstError = form.querySelector(".field-error:not(:empty)");
-      firstError?.closest("label, fieldset")?.querySelector("input, select")?.focus();
-    }
-    return valid;
+    return submission;
   }
 
-  async function sendSubmission(payload) {
-    if (config.mode === "demo") {
-      console.info("AI Sandbox demo check-in (not sent or saved):", { ...payload, email: "[redacted]", name: payload.name ? "[redacted]" : "" });
-      await new Promise(resolve => setTimeout(resolve, 450));
-      return { ok: true, demo: true };
+  async function sendSubmission(entry, signal) {
+    if (config.mode === "demo") return;
+    if (config.mode !== "live" || !config.endpoint) throw new Error("Check-in is not configured.");
+    const endpoint = new URL(config.endpoint, location.href);
+    if (endpoint.origin !== location.origin || !["https:", "http:"].includes(endpoint.protocol) || endpoint.username || endpoint.password) {
+      throw new Error("Use a same-origin check-in endpoint.");
     }
-    if (!config.endpoint) throw new Error("The check-in endpoint has not been configured.");
-
-    if (config.mode === "google-apps-script") {
-      await fetch(config.endpoint, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-      });
-      return { ok: true };
-    }
-
-    const response = await fetch(config.endpoint, {
+    const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      credentials: "same-origin",
+      redirect: "error",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": entry.key },
+      body: JSON.stringify(entry.payload),
+      signal
     });
-    if (!response.ok) throw new Error(`The check-in service returned ${response.status}.`);
-    return { ok: true };
+    if (!response.ok || (await response.json()).ok !== true) throw new Error("The server did not confirm the check-in.");
   }
 
   function showSuccess() {
-    clearSensitiveFields();
+    clearForm();
     showScreen("success");
+    const demo = config.mode === "demo";
+    byId("successScreen").querySelector(".section-label").textContent = demo ? "Demo complete" : "Check-in complete";
+    byId("successTitle").textContent = demo ? "Demo complete." : "You’re all set.";
+    byId("successMessage").textContent = demo ? "No information was sent or saved." : "Have a great session in the AI Sandbox.";
+    byId("successTitle").focus({ preventScroll: true });
     let seconds = Math.max(1, config.successSeconds);
-    document.getElementById("countdownNumber").textContent = seconds;
+    byId("countdownNumber").textContent = seconds;
     successTimer = setInterval(() => {
-      seconds -= 1;
-      document.getElementById("countdownNumber").textContent = Math.max(0, seconds);
+      byId("countdownNumber").textContent = --seconds;
       if (seconds <= 0) returnToIdle();
     }, 1000);
   }
 
-  async function submitCheckIn(payloadOverride) {
-    const payload = payloadOverride || getPayload();
-    if (!validate(payload)) throw new Error("Please complete the required fields.");
-    submitButton.disabled = true;
-    submitButton.querySelector("span").textContent = "Checking in…";
-    document.getElementById("submitError").textContent = "";
-    try {
-      const result = await sendSubmission(payload);
-      showSuccess();
-      return result;
-    } catch (error) {
-      document.getElementById("submitError").textContent = "We couldn’t complete check-in. Please try again or ask a staff member for help.";
-      throw error;
-    } finally {
-      submitButton.disabled = false;
-      submitButton.querySelector("span").textContent = "Check in";
-    }
-  }
-
-  document.getElementById("startButton").addEventListener("click", startCheckIn);
-  document.getElementById("backButton").addEventListener("click", returnToIdle);
-  document.getElementById("continueButton").addEventListener("click", continueCheckIn);
   form.addEventListener("submit", async event => {
     event.preventDefault();
-    try { await submitCheckIn(); } catch (error) { console.error("Check-in failed:", error); }
-  });
-  ["pointerdown", "keydown", "input", "change"].forEach(eventName => {
-    document.addEventListener(eventName, resetInactivityTimer, { passive: true });
+    if (request || dialog.open || activeScreen !== "form" || !validate()) return;
+    const controller = new AbortController();
+    request = controller;
+    clearTimers();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const entry = getSubmission();
+      setBusy(true);
+      await sendSubmission(entry, controller.signal);
+      if (request === controller) showSuccess();
+    } catch {
+      if (request === controller) {
+        byId("submitError").textContent = "Check-in could not be confirmed. Try again or ask a staff member for help.";
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (request === controller) {
+        request = null;
+        setBusy(false);
+        resetInactivityTimer();
+      }
+    }
   });
 
-  function registerWebMcpTools() {
-    const context = document.modelContext;
-    if (!context?.registerTool) return;
-    try {
-      context.registerTool({
-        name: "start_ai_sandbox_check_in",
-        title: "Start AI Sandbox check-in",
-        description: "Open and prepare the visible AI Sandbox visitor check-in form.",
-        inputSchema: { type: "object", properties: {}, additionalProperties: false },
-        annotations: { readOnlyHint: false, untrustedContentHint: false },
-        execute: async () => { startCheckIn(); return { screen: "check-in-form" }; }
-      });
-      context.registerTool({
-        name: "submit_ai_sandbox_check_in",
-        title: "Submit AI Sandbox check-in",
-        description: "Submit a completed AI Sandbox visitor check-in and show confirmation.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            email: { type: "string" },
-            name: { type: "string" },
-            purpose: { type: "string" },
-            station: { type: "string", enum: ["1", "2", "3", "4"] }
-          },
-          required: ["email", "purpose", "station"],
-          additionalProperties: false
-        },
-        annotations: { readOnlyHint: false, untrustedContentHint: false },
-        execute: async input => {
-          if (activeScreen !== "form") startCheckIn();
-          const payload = { timestamp: new Date().toISOString(), kioskId: config.kioskId, userAgent: navigator.userAgent, name: "", ...input };
-          await submitCheckIn(payload);
-          return { status: "checked-in", station: payload.station };
-        }
-      });
-    } catch (error) {
-      console.warn("WebMCP tools were not registered:", error);
-    }
+  byId("startButton").addEventListener("click", () => {
+    clearForm();
+    showScreen("form");
+    email.focus();
+  });
+  byId("backButton").addEventListener("click", returnToIdle);
+  byId("continueButton").addEventListener("click", continueCheckIn);
+  dialog.addEventListener("cancel", event => { event.preventDefault(); continueCheckIn(); });
+  for (const event of ["pointerdown", "keydown", "input", "change"]) {
+    document.addEventListener(event, resetInactivityTimer, { passive: true });
+  }
+  window.addEventListener("pagehide", returnToIdle);
+
+  function updateFullscreenButton() {
+    const active = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+    fullscreen.setAttribute("aria-pressed", String(active));
+    const label = active ? "Exit full screen" : "Full screen";
+    fullscreen.setAttribute("aria-label", label);
+    fullscreen.querySelector("span").textContent = label;
   }
 
-  registerWebMcpTools();
+  fullscreen.hidden = !(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+  fullscreen.addEventListener("click", async () => {
+    byId("fullscreenMessage").textContent = "";
+    try {
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else {
+        await (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen).call(document.documentElement);
+      }
+    } catch {
+      byId("fullscreenMessage").textContent = "Full screen is unavailable in this browser.";
+    }
+    updateFullscreenButton();
+  });
+  document.addEventListener("fullscreenchange", updateFullscreenButton);
+  document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
+  updateFullscreenButton();
 
   if ("serviceWorker" in navigator && location.protocol === "https:") {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js").catch(error => {
-        console.warn("App installation support could not start:", error);
-      });
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
     });
   }
 })();
